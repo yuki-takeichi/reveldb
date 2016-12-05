@@ -1,0 +1,8 @@
+[package]
+name = "reveldb"
+version = "0.1.0"
+authors = ["Yuki Takeichi <yuki.takeichi@gmail.com>"]
+
+[dependencies]
+nix = "0.7.0"
+libc = "0.2.0"
