@@ -2,6 +2,9 @@ extern crate reveldb;
 
 use reveldb::*;
 
+// XXX: cargo runでassert!に失敗した際に
+// テスト全体の実行が止まらないようにする方法を探す
+
 // #[test]
 // fn posix_file_lock() {
 // let env1 = Env::new();

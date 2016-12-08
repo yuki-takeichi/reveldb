@@ -11,6 +11,8 @@ use nix::fcntl::{fcntl, FcntlArg};
 use std::sync::Mutex;
 use std::collections::hash_set::HashSet;
 
+pub mod log;
+
 pub struct Env {
     pub lock_files: Mutex<HashSet<String>>,
 }
