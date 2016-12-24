@@ -129,6 +129,6 @@ mod tests {
     fn file_lock() {
         let env = Env::new();
         let db = DB::new(&env, "testdb").unwrap();
-        assert!(!db.lock_file());
+        assert!(db.lock_file());
     }
 }
