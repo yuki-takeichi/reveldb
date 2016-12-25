@@ -1,5 +1,7 @@
 extern crate libc;
 extern crate nix;
+extern crate crc;
+
 
 use std::fs;
 use std::fs::OpenOptions;
@@ -130,5 +132,13 @@ mod tests {
         let env = Env::new();
         let db = DB::new(&env, "testdb").unwrap();
         assert!(db.lock_file());
+    }
+
+    #[test]
+    fn simple_put() {
+        let env = Env::new();
+        let db = DB::new(&env, "testdb").unwrap();
+        // let status = db.put("hoge", "piyo");
+        // assert!(status.is_ok());
     }
 }
