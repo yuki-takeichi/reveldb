@@ -1,9 +1,11 @@
 extern crate libc;
 extern crate nix;
 extern crate crc;
+extern crate rand;
 
 
 use std::fs;
+use std::string::String;
 use std::fs::OpenOptions;
 use std::fs::File;
 use std::os::unix::io::AsRawFd;
@@ -13,7 +15,8 @@ use nix::fcntl::{fcntl, FcntlArg};
 use std::sync::Mutex;
 use std::collections::hash_set::HashSet;
 
-pub mod log;
+mod log;
+mod memtable;
 
 pub struct Env {
     pub lock_files: Mutex<HashSet<String>>,
@@ -108,6 +111,8 @@ impl<'a> DB<'a> {
     pub fn hoge(&self) {
         println!("({}) hoge", self.dbname)
     }
+
+    // pub fn put(&self, key: &[u8], value: &[u8]) -> Result<(), ()> {}
 
     pub fn open(&self) {
         let _ = self.lock.lock().unwrap();
