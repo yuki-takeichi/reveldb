@@ -1,7 +1,6 @@
 extern crate libc;
 extern crate nix;
 extern crate crc;
-extern crate rand;
 
 
 use std::fs;
@@ -15,6 +14,7 @@ use nix::fcntl::{fcntl, FcntlArg};
 use std::sync::Mutex;
 use std::collections::hash_set::HashSet;
 
+pub mod c;
 mod log;
 mod memtable;
 
