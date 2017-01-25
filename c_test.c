@@ -26,14 +26,13 @@ static const char* GetTempDir(void) {
 
 int main(int argc, char** argv) {
   leveldb_t* db;
-  /*
   leveldb_comparator_t* cmp;
   leveldb_cache_t* cache;
   leveldb_env_t* env;
   leveldb_options_t* options;
   leveldb_readoptions_t* roptions;
   leveldb_writeoptions_t* woptions;
-  */
+
   char* err = NULL;
   int run = -1;
 
