@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 const char* phase = "";
@@ -25,6 +26,23 @@ static const char* GetTempDir(void) {
     abort();                                                            \
   }
 
+static void CmpDestroy(void* arg) { }
+
+static int CmpCompare(void* arg, const char* a, size_t alen,
+                      const char* b, size_t blen) {
+  int n = (alen < blen) ? alen : blen;
+  int r = memcmp(a, b, n);
+  if (r == 0) {
+    if (alen < blen) r = -1;
+    else if (alen > blen) r = +1;
+  }
+  return r;
+}
+
+static const char* CmpName(void* arg) {
+  return "foo";
+}
+
 int main(int argc, char** argv) {
   leveldb_t* db;
   leveldb_comparator_t* cmp;
@@ -45,7 +63,7 @@ int main(int argc, char** argv) {
            ((int) geteuid()));
 
   StartPhase("create_objects");
-  //cmp = leveldb_comparator_create(NULL, CmpDestroy, CmpCompare, CmpName);
+  cmp = leveldb_comparator_create(NULL, CmpDestroy, CmpCompare, CmpName);
   env = leveldb_create_default_env();
   cache = leveldb_cache_create_lru(100000);
 

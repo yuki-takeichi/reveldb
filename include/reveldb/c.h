@@ -39,3 +39,15 @@ extern void leveldb_cache_destroy(leveldb_cache_t* cache);
 
 extern leveldb_env_t* leveldb_create_default_env();
 extern void leveldb_env_destroy(leveldb_env_t*);
+
+/* Comparator */
+
+extern leveldb_comparator_t* leveldb_comparator_create(
+    void* state,
+    void (*destructor)(void*),
+    int (*compare)(
+        void*,
+        const char* a, size_t alen,
+        const char* b, size_t blen),
+    const char* (*name)(void*));
+extern void leveldb_comparator_destroy(leveldb_comparator_t*);
