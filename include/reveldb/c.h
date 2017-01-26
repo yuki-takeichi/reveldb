@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 extern int leveldb_major_version();
 extern int leveldb_minor_version();
 
@@ -27,3 +29,13 @@ extern leveldb_t* leveldb_open(
 extern void leveldb_close(leveldb_t* db);
 
 extern void leveldb_free(void* ptr);
+
+/* Cache */
+
+extern leveldb_cache_t* leveldb_cache_create_lru(size_t capacity);
+extern void leveldb_cache_destroy(leveldb_cache_t* cache);
+
+/* Env */
+
+extern leveldb_env_t* leveldb_create_default_env();
+extern void leveldb_env_destroy(leveldb_env_t*);
