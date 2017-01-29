@@ -71,7 +71,6 @@ int main(int argc, char** argv) {
   leveldb_options_set_comparator(options, cmp);
   leveldb_options_set_error_if_exists(options, 1);
   leveldb_options_set_cache(options, cache);
-  /*
   leveldb_options_set_env(options, env);
   leveldb_options_set_info_log(options, NULL);
   leveldb_options_set_write_buffer_size(options, 100000);
@@ -81,6 +80,7 @@ int main(int argc, char** argv) {
   leveldb_options_set_block_restart_interval(options, 8);
   leveldb_options_set_compression(options, leveldb_no_compression);
 
+  /*
   roptions = leveldb_readoptions_create();
   leveldb_readoptions_set_verify_checksums(roptions, 1);
   leveldb_readoptions_set_fill_cache(roptions, 0);

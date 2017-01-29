@@ -1,4 +1,13 @@
 use libc::c_void;
+use std::mem::transmute;
+
+// Struct
+
+#[repr(u8)]
+enum CompressionType {
+    NoCompression,
+    Snappy,
+}
 
 // C Struct
 
@@ -9,6 +18,9 @@ pub struct leveldb_env_t {
 }
 
 pub struct leveldb_cache_t {
+}
+
+pub struct leveldb_logger_t {
 }
 
 // TODO introduce NonZero
@@ -26,7 +38,6 @@ pub struct leveldb_comparator_t {
 
 impl Drop for leveldb_comparator_t {
     fn drop(&mut self) {
-        println!("drop comparator");
         (self.destructor)(self.state);
     }
 }
@@ -34,12 +45,15 @@ impl Drop for leveldb_comparator_t {
 pub struct leveldb_options_t<'a> {
     comparator: Option<&'a mut leveldb_comparator_t>,
     create_if_missing: bool,
-}
-
-impl<'a> Drop for leveldb_options_t<'a> {
-    fn drop(&mut self) {
-        println!("drop option");
-    }
+    cache: Option<&'a mut leveldb_cache_t>,
+    env: Option<&'a mut leveldb_env_t>,
+    info_log: Option<&'a mut leveldb_logger_t>,
+    write_buffer_size: usize,
+    paranoid_checks: bool,
+    max_open_files: u32,
+    block_size: usize,
+    block_restart_interval: u32,
+    compression: CompressionType,
 }
 
 // Misc
@@ -128,9 +142,19 @@ pub extern "C" fn leveldb_cache_destroy(cache: *mut leveldb_cache_t) {
 
 #[no_mangle]
 pub extern "C" fn leveldb_options_create<'a>() -> *mut leveldb_options_t<'a> {
+    // TODO set the default value as original leveldb impl
     let options = Box::new(leveldb_options_t {
         comparator: None,
         create_if_missing: false,
+        cache: None,
+        env: None,
+        info_log: None,
+        write_buffer_size: 4 * 1024 * 1024, // 4MB
+        paranoid_checks: false,
+        max_open_files: 1000,
+        block_size: 4 * 1024, // 4KB
+        block_restart_interval: 16,
+        compression: CompressionType::Snappy,
     });
     Box::into_raw(options)
 }
@@ -159,4 +183,64 @@ pub extern "C" fn leveldb_options_set_error_if_exists(opt: *mut leveldb_options_
 #[no_mangle]
 pub extern "C" fn leveldb_options_set_cache(opt: *mut leveldb_options_t,
                                             cache: *mut leveldb_cache_t) {
+    let cache = unsafe { cache.as_mut().expect("null pointer") };
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.cache = Some(cache);
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_env(opt: *mut leveldb_options_t, env: *mut leveldb_env_t) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    if let Some(env) = unsafe { env.as_mut() } {
+        opt.env = Some(env);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_info_log(opt: *mut leveldb_options_t,
+                                               l: *mut leveldb_logger_t) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    if let Some(l) = unsafe { l.as_mut() } {
+        opt.info_log = Some(l);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_write_buffer_size(opt: *mut leveldb_options_t, s: usize) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.write_buffer_size = s;
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_max_open_files(opt: *mut leveldb_options_t, n: u32) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.max_open_files = n;
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_block_size(opt: *mut leveldb_options_t, n: usize) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.block_size = n;
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_block_restart_interval(opt: *mut leveldb_options_t, n: u32) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.block_restart_interval = n;
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_compression(opt: *mut leveldb_options_t, t: u8) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    if 0 <= t && t <= 1 {
+        opt.compression = unsafe { transmute(t) };
+    } else {
+        panic!("expect");
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_options_set_paranoid_checks(opt: *mut leveldb_options_t, v: u8) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.paranoid_checks = v != 0;
 }
