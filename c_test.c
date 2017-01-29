@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
   leveldb_close(db);
   leveldb_options_destroy(options);
   leveldb_cache_destroy(cache);
-  //leveldb_comparator_destroy(cmp);
+  leveldb_comparator_destroy(cmp);
 
   fprintf(stderr, "PASS\n");
   return 0;

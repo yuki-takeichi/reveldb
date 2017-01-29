@@ -11,6 +11,7 @@ pub struct leveldb_env_t {
 pub struct leveldb_cache_t {
 }
 
+// TODO introduce NonZero
 pub struct leveldb_comparator_t {
     state: *mut c_void,
     destructor: extern "C" fn(arg: *mut c_void),
@@ -25,6 +26,7 @@ pub struct leveldb_comparator_t {
 
 impl Drop for leveldb_comparator_t {
     fn drop(&mut self) {
+        println!("drop comparator");
         (self.destructor)(self.state);
     }
 }
@@ -32,6 +34,12 @@ impl Drop for leveldb_comparator_t {
 pub struct leveldb_options_t<'a> {
     comparator: Option<&'a mut leveldb_comparator_t>,
     create_if_missing: bool,
+}
+
+impl<'a> Drop for leveldb_options_t<'a> {
+    fn drop(&mut self) {
+        println!("drop option");
+    }
 }
 
 // Misc
@@ -59,9 +67,7 @@ pub extern "C" fn leveldb_close(db: *mut leveldb_t) {}
 
 #[no_mangle]
 pub extern "C" fn leveldb_free(db: *mut leveldb_t) {
-    unsafe {
-        Box::from_raw(db);
-    }
+    unsafe { Box::from_raw(db) };
 }
 
 // Comparator
@@ -88,9 +94,7 @@ pub extern "C" fn leveldb_comparator_create(state: *mut c_void,
 
 #[no_mangle]
 pub extern "C" fn leveldb_comparator_destroy(cmp: *mut leveldb_comparator_t) {
-    unsafe {
-        Box::from_raw(cmp);
-    }
+    unsafe { Box::from_raw(cmp) };
 }
 
 // Env
@@ -102,9 +106,7 @@ pub extern "C" fn leveldb_create_default_env() -> *mut leveldb_env_t {
 
 #[no_mangle]
 pub extern "C" fn leveldb_env_destroy(env: *mut leveldb_env_t) {
-    unsafe {
-        Box::from_raw(env);
-    }
+    unsafe { Box::from_raw(env) };
 }
 
 // Cache
@@ -143,18 +145,15 @@ pub extern "C" fn leveldb_options_destroy(options: *mut leveldb_options_t) {
 #[no_mangle]
 pub extern "C" fn leveldb_options_set_comparator(opt: *mut leveldb_options_t,
                                                  cmp: *mut leveldb_comparator_t) {
-    let mut cmp = unsafe { Box::from_raw(cmp) };
-    let mut opt = unsafe { Box::from_raw(opt) };
-    opt.comparator = Some(&mut cmp);
-    Box::into_raw(opt);
-    // Box::into_raw(cmp);
+    let cmp = unsafe { cmp.as_mut().expect("null pointer") };
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.comparator = Some(cmp);
 }
 
 #[no_mangle]
 pub extern "C" fn leveldb_options_set_error_if_exists(opt: *mut leveldb_options_t, v: u8) {
-    let mut opt = unsafe { Box::from_raw(opt) };
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
     opt.create_if_missing = v != 0;
-    Box::into_raw(opt);
 }
 
 #[no_mangle]
