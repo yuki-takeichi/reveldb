@@ -133,9 +133,7 @@ pub extern "C" fn leveldb_cache_create_lru(capacity: usize) -> *mut leveldb_cach
 
 #[no_mangle]
 pub extern "C" fn leveldb_cache_destroy(cache: *mut leveldb_cache_t) {
-    unsafe {
-        Box::from_raw(cache);
-    }
+    unsafe { Box::from_raw(cache) };
 }
 
 // Options
@@ -161,9 +159,7 @@ pub extern "C" fn leveldb_options_create<'a>() -> *mut leveldb_options_t<'a> {
 
 #[no_mangle]
 pub extern "C" fn leveldb_options_destroy(options: *mut leveldb_options_t) {
-    unsafe {
-        Box::from_raw(options);
-    }
+    unsafe { Box::from_raw(options) };
 }
 
 #[no_mangle]
