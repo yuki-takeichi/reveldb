@@ -40,6 +40,37 @@ extern void leveldb_cache_destroy(leveldb_cache_t* cache);
 extern leveldb_env_t* leveldb_create_default_env();
 extern void leveldb_env_destroy(leveldb_env_t*);
 
+/* Options */
+
+extern leveldb_options_t* leveldb_options_create();
+extern void leveldb_options_destroy(leveldb_options_t*);
+extern void leveldb_options_set_comparator(
+    leveldb_options_t*,
+    leveldb_comparator_t*);
+extern void leveldb_options_set_filter_policy(
+    leveldb_options_t*,
+    leveldb_filterpolicy_t*);
+extern void leveldb_options_set_create_if_missing(
+    leveldb_options_t*, unsigned char);
+extern void leveldb_options_set_error_if_exists(
+    leveldb_options_t*, unsigned char);
+extern void leveldb_options_set_paranoid_checks(
+    leveldb_options_t*, unsigned char);
+extern void leveldb_options_set_env(leveldb_options_t*, leveldb_env_t*);
+extern void leveldb_options_set_info_log(leveldb_options_t*, leveldb_logger_t*);
+extern void leveldb_options_set_write_buffer_size(leveldb_options_t*, size_t);
+extern void leveldb_options_set_max_open_files(leveldb_options_t*, int);
+extern void leveldb_options_set_cache(leveldb_options_t*, leveldb_cache_t*);
+extern void leveldb_options_set_block_size(leveldb_options_t*, size_t);
+extern void leveldb_options_set_block_restart_interval(leveldb_options_t*, int);
+
+enum {
+  leveldb_no_compression = 0,
+  leveldb_snappy_compression = 1
+};
+extern void leveldb_options_set_compression(leveldb_options_t*, int);
+
+
 /* Comparator */
 
 extern leveldb_comparator_t* leveldb_comparator_create(

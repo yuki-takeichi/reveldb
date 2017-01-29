@@ -67,6 +67,34 @@ int main(int argc, char** argv) {
   env = leveldb_create_default_env();
   cache = leveldb_cache_create_lru(100000);
 
+  options = leveldb_options_create();
+  leveldb_options_set_comparator(options, cmp);
+  leveldb_options_set_error_if_exists(options, 1);
+  leveldb_options_set_cache(options, cache);
+  /*
+  leveldb_options_set_env(options, env);
+  leveldb_options_set_info_log(options, NULL);
+  leveldb_options_set_write_buffer_size(options, 100000);
+  leveldb_options_set_paranoid_checks(options, 1);
+  leveldb_options_set_max_open_files(options, 10);
+  leveldb_options_set_block_size(options, 1024);
+  leveldb_options_set_block_restart_interval(options, 8);
+  leveldb_options_set_compression(options, leveldb_no_compression);
+
+  roptions = leveldb_readoptions_create();
+  leveldb_readoptions_set_verify_checksums(roptions, 1);
+  leveldb_readoptions_set_fill_cache(roptions, 0);
+
+  woptions = leveldb_writeoptions_create();
+  leveldb_writeoptions_set_sync(woptions, 1);
+  */
+
+  StartPhase("cleanup");
+  leveldb_close(db);
+  leveldb_options_destroy(options);
+  leveldb_cache_destroy(cache);
+  //leveldb_comparator_destroy(cmp);
+
   fprintf(stderr, "PASS\n");
   return 0;
 }
