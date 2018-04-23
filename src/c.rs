@@ -116,7 +116,6 @@ pub extern "C" fn leveldb_comparator_destroy(cmp: *mut leveldb_comparator_t) {
 // Env
 #[no_mangle]
 pub extern "C" fn leveldb_create_default_env() -> *mut leveldb_env_t {
-    println!("DEBUG: leveldb_create_default_env");
     let env = Box::new(leveldb_env_t {});
     Box::into_raw(env)
 }
@@ -143,6 +142,7 @@ pub extern "C" fn leveldb_cache_destroy(cache: *mut leveldb_cache_t) {
 
 #[no_mangle]
 pub extern "C" fn leveldb_options_create<'a>() -> *mut leveldb_options_t<'a> {
+    println!("DEBUG: leveldb_options_create");
     // TODO set the default value as original leveldb impl
     let options = Box::new(leveldb_options_t {
         comparator: None,

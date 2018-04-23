@@ -7,11 +7,8 @@ authors = ["Yuki Takeichi <yuki.takeichi@gmail.com>"]
 crate-type = ["rlib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "c_test_hoge"
-path = "src/bin/c_test_hoge.rs"
-
-[feature]
-leveldb = []
+name = "c_test"
+path = "src/bin/c_test.rs"
 
 [dependencies]
 nix = "0.7.0"
