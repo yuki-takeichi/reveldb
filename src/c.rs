@@ -1,5 +1,7 @@
-use libc::c_void;
 use std::mem::transmute;
+use std::ffi::CString;
+use libc::c_void;
+use std::os::raw::c_char;
 
 // Struct
 
@@ -11,28 +13,25 @@ enum CompressionType {
 
 // C Struct
 
-pub struct leveldb_t {
-}
+pub struct leveldb_t {}
 
-pub struct leveldb_env_t {
-}
+pub struct leveldb_env_t {}
 
-pub struct leveldb_cache_t {
-}
+pub struct leveldb_cache_t {}
 
-pub struct leveldb_logger_t {
-}
+pub struct leveldb_logger_t {}
 
 // TODO introduce NonZero
 pub struct leveldb_comparator_t {
     state: *mut c_void,
     destructor: extern "C" fn(arg: *mut c_void),
-    compare: extern "C" fn(arg: *mut c_void,
-                           a: *mut char,
-                           alen: *mut usize,
-                           b: *mut char,
-                           blen: *mut usize)
-                           -> i32,
+    compare: extern "C" fn(
+        arg: *mut c_void,
+        a: *mut char,
+        alen: *mut usize,
+        b: *mut char,
+        blen: *mut usize,
+    ) -> i32,
     name: extern "C" fn(arg: *mut c_void) -> *mut char,
 }
 
@@ -53,6 +52,7 @@ pub struct leveldb_options_t<'a> {
     max_open_files: u32,
     block_size: usize,
     block_restart_interval: u32,
+    max_file_size: usize,
     compression: CompressionType,
 }
 
@@ -65,7 +65,7 @@ pub extern "C" fn leveldb_major_version() -> i8 {
 
 #[no_mangle]
 pub extern "C" fn leveldb_minor_version() -> i8 {
-    19
+    21
 }
 
 // DB
@@ -87,16 +87,18 @@ pub extern "C" fn leveldb_free(db: *mut leveldb_t) {
 // Comparator
 
 #[no_mangle]
-pub extern "C" fn leveldb_comparator_create(state: *mut c_void,
-                                            destructor: extern "C" fn(arg: *mut c_void),
-                                            compare: extern "C" fn(arg: *mut c_void,
-                                                                   a: *mut char,
-                                                                   alen: *mut usize,
-                                                                   b: *mut char,
-                                                                   blen: *mut usize)
-                                                                   -> i32,
-                                            name: extern "C" fn(arg: *mut c_void) -> *mut char)
-                                            -> *mut leveldb_comparator_t {
+pub extern "C" fn leveldb_comparator_create(
+    state: *mut c_void,
+    destructor: extern "C" fn(arg: *mut c_void),
+    compare: extern "C" fn(
+        arg: *mut c_void,
+        a: *mut char,
+        alen: *mut usize,
+        b: *mut char,
+        blen: *mut usize,
+    ) -> i32,
+    name: extern "C" fn(arg: *mut c_void) -> *mut char,
+) -> *mut leveldb_comparator_t {
     let comparator = Box::new(leveldb_comparator_t {
         state: state,
         destructor: destructor,
@@ -114,6 +116,7 @@ pub extern "C" fn leveldb_comparator_destroy(cmp: *mut leveldb_comparator_t) {
 // Env
 #[no_mangle]
 pub extern "C" fn leveldb_create_default_env() -> *mut leveldb_env_t {
+    println!("DEBUG: leveldb_create_default_env");
     let env = Box::new(leveldb_env_t {});
     Box::into_raw(env)
 }
@@ -152,6 +155,7 @@ pub extern "C" fn leveldb_options_create<'a>() -> *mut leveldb_options_t<'a> {
         max_open_files: 1000,
         block_size: 4 * 1024, // 4KB
         block_restart_interval: 16,
+        max_file_size: 10,
         compression: CompressionType::Snappy,
     });
     Box::into_raw(options)
@@ -163,8 +167,10 @@ pub extern "C" fn leveldb_options_destroy(options: *mut leveldb_options_t) {
 }
 
 #[no_mangle]
-pub extern "C" fn leveldb_options_set_comparator(opt: *mut leveldb_options_t,
-                                                 cmp: *mut leveldb_comparator_t) {
+pub extern "C" fn leveldb_options_set_comparator(
+    opt: *mut leveldb_options_t,
+    cmp: *mut leveldb_comparator_t,
+) {
     let cmp = unsafe { cmp.as_mut().expect("null pointer") };
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     opt.comparator = Some(cmp);
@@ -177,8 +183,10 @@ pub extern "C" fn leveldb_options_set_error_if_exists(opt: *mut leveldb_options_
 }
 
 #[no_mangle]
-pub extern "C" fn leveldb_options_set_cache(opt: *mut leveldb_options_t,
-                                            cache: *mut leveldb_cache_t) {
+pub extern "C" fn leveldb_options_set_cache(
+    opt: *mut leveldb_options_t,
+    cache: *mut leveldb_cache_t,
+) {
     let cache = unsafe { cache.as_mut().expect("null pointer") };
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     opt.cache = Some(cache);
@@ -193,8 +201,10 @@ pub extern "C" fn leveldb_options_set_env(opt: *mut leveldb_options_t, env: *mut
 }
 
 #[no_mangle]
-pub extern "C" fn leveldb_options_set_info_log(opt: *mut leveldb_options_t,
-                                               l: *mut leveldb_logger_t) {
+pub extern "C" fn leveldb_options_set_info_log(
+    opt: *mut leveldb_options_t,
+    l: *mut leveldb_logger_t,
+) {
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     if let Some(l) = unsafe { l.as_mut() } {
         opt.info_log = Some(l);
@@ -226,6 +236,12 @@ pub extern "C" fn leveldb_options_set_block_restart_interval(opt: *mut leveldb_o
 }
 
 #[no_mangle]
+pub extern "C" fn leveldb_options_set_max_file_size(opt: *mut leveldb_options_t, s: usize) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.max_file_size = s;
+}
+
+#[no_mangle]
 pub extern "C" fn leveldb_options_set_compression(opt: *mut leveldb_options_t, t: u8) {
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     if 0 <= t && t <= 1 {
@@ -239,4 +255,10 @@ pub extern "C" fn leveldb_options_set_compression(opt: *mut leveldb_options_t, t
 pub extern "C" fn leveldb_options_set_paranoid_checks(opt: *mut leveldb_options_t, v: u8) {
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     opt.paranoid_checks = v != 0;
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_env_get_test_directory(env: *mut leveldb_env_t) -> *const c_char {
+    // XXX uniqueify
+    CString::new("/tmp/reveldbtest-0").unwrap().as_ptr()
 }

@@ -6,6 +6,13 @@ authors = ["Yuki Takeichi <yuki.takeichi@gmail.com>"]
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
 
+[[bin]]
+name = "c_test_hoge"
+path = "src/bin/c_test_hoge.rs"
+
+[feature]
+leveldb = []
+
 [dependencies]
 nix = "0.7.0"
 libc = "0.2.0"
