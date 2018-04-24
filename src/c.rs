@@ -56,6 +56,15 @@ pub struct leveldb_options_t<'a> {
     compression: CompressionType,
 }
 
+pub struct leveldb_readoptions_t {
+    verify_checksums: bool,
+    fill_cache: bool,
+}
+
+pub struct leveldb_writeoptions_t {
+    sync: bool,
+}
+
 // Misc
 
 #[no_mangle]
@@ -261,4 +270,35 @@ pub extern "C" fn leveldb_options_set_paranoid_checks(opt: *mut leveldb_options_
 pub extern "C" fn leveldb_env_get_test_directory(env: *mut leveldb_env_t) -> *const c_char {
     // XXX uniqueify
     CString::new("/tmp/reveldbtest-0").unwrap().as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_readoptions_create() -> *mut leveldb_readoptions_t {
+    let roptions = Box::new(leveldb_readoptions_t {
+        verify_checksums: false,
+        fill_cache: false,
+    });
+    Box::into_raw(roptions)
+}
+
+#[no_mangle]
+pub extern fn leveldb_readoptions_set_verify_checksums(opt: *mut leveldb_readoptions_t, v: bool) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.verify_checksums = v;
+}
+
+#[no_mangle]
+pub extern fn leveldb_readoptions_set_fill_cache(opt: *mut leveldb_readoptions_t, v: bool) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.fill_cache = v;
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_writeoptions_create() -> *mut leveldb_writeoptions_t {
+    Box::into_raw(Box::new(leveldb_writeoptions_t { sync: false }))
+}
+#[no_mangle]
+pub extern "C" fn leveldb_writeoptions_set_sync(opt: *mut leveldb_writeoptions_t, v: bool) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.sync = v;
 }

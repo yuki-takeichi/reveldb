@@ -111,12 +111,12 @@ extern "C" {
 
     // Read options
     fn leveldb_readoptions_create() -> *mut leveldb_readoptions_t;
-    fn leveldb_readoptions_set_verify_checksums(opt: *mut leveldb_readoptions_t, v: u8);
-    fn leveldb_readoptions_set_fill_cache(opt: *mut leveldb_readoptions_t, v: u8);
+    fn leveldb_readoptions_set_verify_checksums(opt: *mut leveldb_readoptions_t, v: bool);
+    fn leveldb_readoptions_set_fill_cache(opt: *mut leveldb_readoptions_t, v: bool);
 
     // Write options
     fn leveldb_writeoptions_create() -> *mut leveldb_writeoptions_t;
-    fn leveldb_writeoptions_set_sync(opt: *mut leveldb_writeoptions_t, v: u8);
+    fn leveldb_writeoptions_set_sync(opt: *mut leveldb_writeoptions_t, v: bool);
 
     // Utility
     fn leveldb_free(ptr: *mut char);
@@ -190,14 +190,14 @@ fn main() {
         leveldb_options_set_max_file_size(options, 3 << 20);
         leveldb_options_set_compression(options, leveldb_compression::no_compression);
 
-        /*
         let roptions = leveldb_readoptions_create();
-        leveldb_readoptions_set_verify_checksums(roptions, 1);
-        leveldb_readoptions_set_fill_cache(roptions, 0);
+        leveldb_readoptions_set_verify_checksums(roptions, true); // XXX 1
+        leveldb_readoptions_set_fill_cache(roptions, false); // XXX 0
 
         let woptions = leveldb_writeoptions_create();
-        leveldb_writeoptions_set_sync(woptions, 1);
+        leveldb_writeoptions_set_sync(woptions, true); // XXX 1
 
+        /*
         // Phase: destroy
 
         let mut err: *mut char = null::<char>() as *mut char;
