@@ -4,6 +4,7 @@ use std::ptr::null;
 use std::cmp::min;
 use libc::{c_void, memcmp};
 use std::ffi::CString;
+use std::ffi::CStr;
 use std::os::raw::c_char;
 
 #[repr(C)]
@@ -48,8 +49,8 @@ extern "C" {
 
     fn leveldb_open(
         options: *const leveldb_options_t,
-        name: *const char,
-        errptr: *mut *mut char,
+        name: *const c_char,
+        errptr: *mut *mut c_char,
     ) -> *mut leveldb_t;
     fn leveldb_close(db: *const leveldb_t);
     fn leveldb_put(
@@ -70,8 +71,8 @@ extern "C" {
         key: *const c_char,
         keylen: usize,
         vallen: *mut usize,
-        errptr: *mut *mut char,
-    ) -> *mut char;
+        errptr: *mut *mut c_char,
+    ) -> *mut c_char;
 
     fn leveldb_comparator_create(
         //state: *mut c_void,
@@ -88,16 +89,16 @@ extern "C" {
     // Management operations
     fn leveldb_destroy_db(
         options: *const leveldb_options_t,
-        name: *const char,
-        errptr: *mut *mut char,
+        name: *const c_char,
+        errptr: *mut *mut c_char,
     );
 
     // Options
     fn leveldb_options_create() -> *mut leveldb_options_t;
 
     fn leveldb_options_set_comparator(opt: *mut leveldb_options_t, cmp: *mut leveldb_comparator_t);
-    fn leveldb_options_set_create_if_missing(opt: *mut leveldb_options_t, v: u8);
-    fn leveldb_options_set_error_if_exists(opt: *mut leveldb_options_t, v: u8);
+    fn leveldb_options_set_create_if_missing(opt: *mut leveldb_options_t, v: bool);
+    fn leveldb_options_set_error_if_exists(opt: *mut leveldb_options_t, v: bool);
     fn leveldb_options_set_cache(opt: *mut leveldb_options_t, c: *mut leveldb_cache_t);
     fn leveldb_options_set_env(opt: *mut leveldb_options_t, env: *mut leveldb_env_t);
     fn leveldb_options_set_info_log(opt: *mut leveldb_options_t, l: Option<&mut leveldb_logger_t>);
@@ -119,7 +120,7 @@ extern "C" {
     fn leveldb_writeoptions_set_sync(opt: *mut leveldb_writeoptions_t, v: bool);
 
     // Utility
-    fn leveldb_free(ptr: *mut char);
+    fn leveldb_free(ptr: *mut c_char);
     fn leveldb_major_version() -> i64;
     fn leveldb_minor_version() -> i64;
 }
@@ -153,12 +154,11 @@ extern "C" fn cmp_name(_: *mut c_void) -> *const str {
     return "foo";
 }
 
-// XXX generize over *mut *mut T
-fn cond_free(ptr: *mut *mut char) {
+fn free_c_str_if_not_null(ptr: *mut *mut c_char) {
     unsafe {
         if !(*ptr).is_null() {
             libc::free(*ptr as *mut c_void);
-            *ptr = null::<char>() as *mut char;
+            *ptr = null::<char>() as *mut c_char;
         }
     }
 }
@@ -178,7 +178,7 @@ fn main() {
 
         let options = leveldb_options_create();
         leveldb_options_set_comparator(options, cmp);
-        leveldb_options_set_error_if_exists(options, 1);
+        leveldb_options_set_error_if_exists(options, true); // XXX 1
         leveldb_options_set_cache(options, cache);
         leveldb_options_set_env(options, env);
         leveldb_options_set_info_log(options, None);
@@ -197,35 +197,36 @@ fn main() {
         let woptions = leveldb_writeoptions_create();
         leveldb_writeoptions_set_sync(woptions, true); // XXX 1
 
-        /*
         // Phase: destroy
 
-        let mut err: *mut char = null::<char>() as *mut char;
-        leveldb_destroy_db(options, dbname, &mut err as *mut *mut char);
-        cond_free(&mut err as *mut *mut char);
+        let mut err: *mut c_char = null::<char>() as *mut c_char;
+        leveldb_destroy_db(options, dbname, &mut err as *mut *mut c_char);
+        free_c_str_if_not_null(&mut err as *mut *mut c_char);
 
         // Phase: open_error
 
-        let db = leveldb_open(options, dbname, &mut err as *mut *mut char);
-        assert!(!err.is_null());
-        cond_free(&mut err as *mut *mut char);
+        let mut err: *mut c_char = null::<char>() as *mut c_char;
+        let db = leveldb_open(options, dbname, &mut err);
+        assert!(!err.is_null()); // missing db file
+        free_c_str_if_not_null(&mut err as *mut *mut c_char);
 
         // Phase: leveldb_free
 
-        let mut err: *mut char = null::<char>() as *mut char;
+        let mut err: *mut c_char = null::<char>() as *mut c_char;
         let db = leveldb_open(options, dbname, &mut err);
         assert!(!err.is_null());
+        println!("{:?}", CStr::from_ptr(err).to_string_lossy());
         leveldb_free(err);
 
         // Phase: open
 
-        let mut err: *mut char = null::<char>() as *mut char;
-        leveldb_options_set_create_if_missing(options, 1);
+        let mut err: *mut c_char = null::<char>() as *mut c_char;
+        leveldb_options_set_create_if_missing(options, true); // XXX 1
         let db = leveldb_open(options, dbname, &mut err);
         assert!(err.is_null());
 
         //CheckGet(db, roptions, "foo", NULL);
-        let mut err: *mut char = null::<char>() as *mut char;
+        let mut err: *mut c_char = null::<char>() as *mut c_char;
         let key = CString::new("foo").unwrap();
         let mut val_len: usize = 0;
         let mut val = leveldb_get(
@@ -238,8 +239,9 @@ fn main() {
         );
         assert!(err.is_null());
         assert!(val.is_null());
-        cond_free(&mut val);
-        */
+        // XXX This should be leveldb_free(&mut val as *mut).
+        //     See comment above leveldb_free decl in leveldb/c.h.
+        free_c_str_if_not_null(&mut val);
     }
-    println!("hoge");
+    println!("done"); // XXX debug
 }

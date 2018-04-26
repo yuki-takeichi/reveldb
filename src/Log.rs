@@ -7,7 +7,6 @@
 //
 
 use crc::crc32;
-use std::num::Wrapping;
 
 use std::mem::transmute;
 

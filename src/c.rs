@@ -1,7 +1,9 @@
 use std::mem::transmute;
+use std::ptr::null;
 use std::ffi::CString;
-use libc::c_void;
+use std::ffi::CStr;
 use std::os::raw::c_char;
+use libc::{c_void, free, strdup};
 
 // Struct
 
@@ -44,6 +46,7 @@ impl Drop for leveldb_comparator_t {
 pub struct leveldb_options_t<'a> {
     comparator: Option<&'a mut leveldb_comparator_t>,
     create_if_missing: bool,
+    error_if_exists: bool,
     cache: Option<&'a mut leveldb_cache_t>,
     env: Option<&'a mut leveldb_env_t>,
     info_log: Option<&'a mut leveldb_logger_t>,
@@ -80,17 +83,51 @@ pub extern "C" fn leveldb_minor_version() -> i8 {
 // DB
 
 #[no_mangle]
-pub extern "C" fn leveldb_open() -> *mut leveldb_t {
-    let db = Box::new(leveldb_t {});
-    Box::into_raw(db)
+pub extern "C" fn leveldb_open(
+    options: *const leveldb_options_t,
+    name: *const c_char,
+    errptr: *mut *mut c_char,
+) -> *mut leveldb_t {
+    let options = unsafe { options.as_ref().expect("null pointer") };
+    if (options.create_if_missing) {
+        let db = Box::new(leveldb_t {});
+        Box::into_raw(db)
+    } else {
+        let err = CString::new(format!(
+            "Invalid argument: {}: does not exist (create_if_missing is false)",
+            unsafe { CStr::from_ptr(name).to_string_lossy() }
+        )).unwrap();
+
+        unsafe {
+            // error (alloc string from system allocator)
+            *errptr = err.into_raw();
+            //*errptr = strdup(err); XXX why not work?
+        }
+        null::<leveldb_t>() as *mut leveldb_t
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn leveldb_close(db: *mut leveldb_t) {}
+pub extern "C" fn leveldb_close(db: *mut leveldb_t) {
+    unsafe { Box::from_raw(db) };
+}
 
 #[no_mangle]
-pub extern "C" fn leveldb_free(db: *mut leveldb_t) {
-    unsafe { Box::from_raw(db) };
+/* used to free err or dbname */
+pub extern "C" fn leveldb_free(ptr: *mut c_char) {
+    unsafe { free(ptr as *mut c_void) };
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_get(
+    db: *mut leveldb_t,
+    options: *const leveldb_readoptions_t,
+    key: *const c_char,
+    keylen: usize,
+    vallen: *mut usize,
+    errptr: *mut *mut c_char,
+) -> *mut c_char {
+    null::<c_char>() as *mut c_char
 }
 
 // Comparator
@@ -156,6 +193,7 @@ pub extern "C" fn leveldb_options_create<'a>() -> *mut leveldb_options_t<'a> {
     let options = Box::new(leveldb_options_t {
         comparator: None,
         create_if_missing: false,
+        error_if_exists: false,
         cache: None,
         env: None,
         info_log: None,
@@ -176,6 +214,12 @@ pub extern "C" fn leveldb_options_destroy(options: *mut leveldb_options_t) {
 }
 
 #[no_mangle]
+pub extern "C" fn leveldb_options_set_create_if_missing(opt: *mut leveldb_options_t, v: bool) {
+    let opt = unsafe { opt.as_mut().expect("null pointer") };
+    opt.create_if_missing = v;
+}
+
+#[no_mangle]
 pub extern "C" fn leveldb_options_set_comparator(
     opt: *mut leveldb_options_t,
     cmp: *mut leveldb_comparator_t,
@@ -186,9 +230,9 @@ pub extern "C" fn leveldb_options_set_comparator(
 }
 
 #[no_mangle]
-pub extern "C" fn leveldb_options_set_error_if_exists(opt: *mut leveldb_options_t, v: u8) {
+pub extern "C" fn leveldb_options_set_error_if_exists(opt: *mut leveldb_options_t, v: bool) {
     let opt = unsafe { opt.as_mut().expect("null pointer") };
-    opt.create_if_missing = v != 0;
+    opt.error_if_exists;
 }
 
 #[no_mangle]
@@ -269,7 +313,7 @@ pub extern "C" fn leveldb_options_set_paranoid_checks(opt: *mut leveldb_options_
 #[no_mangle]
 pub extern "C" fn leveldb_env_get_test_directory(env: *mut leveldb_env_t) -> *const c_char {
     // XXX uniqueify
-    CString::new("/tmp/reveldbtest-0").unwrap().as_ptr()
+    unsafe { CString::new("/tmp/reveldbtest-0").unwrap().into_raw() }
 }
 
 #[no_mangle]
@@ -282,13 +326,16 @@ pub extern "C" fn leveldb_readoptions_create() -> *mut leveldb_readoptions_t {
 }
 
 #[no_mangle]
-pub extern fn leveldb_readoptions_set_verify_checksums(opt: *mut leveldb_readoptions_t, v: bool) {
+pub extern "C" fn leveldb_readoptions_set_verify_checksums(
+    opt: *mut leveldb_readoptions_t,
+    v: bool,
+) {
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     opt.verify_checksums = v;
 }
 
 #[no_mangle]
-pub extern fn leveldb_readoptions_set_fill_cache(opt: *mut leveldb_readoptions_t, v: bool) {
+pub extern "C" fn leveldb_readoptions_set_fill_cache(opt: *mut leveldb_readoptions_t, v: bool) {
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     opt.fill_cache = v;
 }
@@ -297,8 +344,17 @@ pub extern fn leveldb_readoptions_set_fill_cache(opt: *mut leveldb_readoptions_t
 pub extern "C" fn leveldb_writeoptions_create() -> *mut leveldb_writeoptions_t {
     Box::into_raw(Box::new(leveldb_writeoptions_t { sync: false }))
 }
+
 #[no_mangle]
 pub extern "C" fn leveldb_writeoptions_set_sync(opt: *mut leveldb_writeoptions_t, v: bool) {
     let opt = unsafe { opt.as_mut().expect("null pointer") };
     opt.sync = v;
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_destroy_db(
+    options: *const leveldb_options_t,
+    name: *const c_char,
+    errptr: *mut *mut c_char,
+) {
 }
