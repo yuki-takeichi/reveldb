@@ -399,3 +399,13 @@ pub extern "C" fn leveldb_put(
     let val = unsafe { slice::from_raw_parts(val, vallen) };
     db.mem_store.insert(key.clone(), val.clone());
 }
+
+#[no_mangle]
+pub extern "C" fn leveldb_compact_range(
+    db: *mut leveldb_t,
+    start_key: *const c_char,
+    start_key_len: usize,
+    limit_key: *const c_char,
+    limit_key_len: usize,
+) {
+}

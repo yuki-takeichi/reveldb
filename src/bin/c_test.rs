@@ -121,6 +121,14 @@ extern "C" {
     fn leveldb_writeoptions_create() -> *mut leveldb_writeoptions_t;
     fn leveldb_writeoptions_set_sync(opt: *mut leveldb_writeoptions_t, v: bool);
 
+    fn leveldb_compact_range(
+        db: *mut leveldb_t,
+        start_key: *const c_char,
+        start_key_len: usize,
+        limit_key: *const c_char,
+        limit_key_len: usize,
+    );
+
     // Utility
     fn leveldb_free(ptr: *mut c_char);
     fn leveldb_major_version() -> i64;
@@ -284,11 +292,9 @@ fn main() {
         assert!(err.is_null());
         check_get(db, roptions, "foo", Some("hello"));
 
-        /*
         // Phase: compactall
-        leveldb_compact_range(db, NULL, 0, NULL, 0);
-        //CheckGet(db, roptions, "foo", "hello");
-        */
+        leveldb_compact_range(db, null::<c_char>(), 0, null::<c_char>(), 0);
+        check_get(db, roptions, "foo", Some("hello"));
     }
     println!("done"); // XXX debug
 }
