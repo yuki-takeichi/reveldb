@@ -284,9 +284,9 @@ fn main() {
             db,
             woptions,
             key.as_ptr(),
-            key.into_bytes().len(),
+            key.as_bytes().len(),
             val.as_ptr(), // can be non-null terminated
-            val.into_bytes().len(),
+            val.as_bytes().len(),
             &mut err,
         );
         assert!(err.is_null());
