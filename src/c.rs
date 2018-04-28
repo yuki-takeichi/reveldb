@@ -1,9 +1,11 @@
+use std::slice;
+use std::collections::HashMap;
 use std::mem::transmute;
 use std::ptr::null;
 use std::ffi::CString;
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use libc::{c_void, free, strdup};
+use libc::{c_void, free};
 
 // Struct
 
@@ -15,7 +17,9 @@ enum CompressionType {
 
 // C Struct
 
-pub struct leveldb_t {}
+pub struct leveldb_t<'a> {
+    mem_store: HashMap<&'a [c_char], &'a [c_char]>,
+}
 
 pub struct leveldb_env_t {}
 
@@ -43,6 +47,7 @@ impl Drop for leveldb_comparator_t {
     }
 }
 
+// XXX #[derive(Default)]
 pub struct leveldb_options_t<'a> {
     comparator: Option<&'a mut leveldb_comparator_t>,
     create_if_missing: bool,
@@ -59,11 +64,13 @@ pub struct leveldb_options_t<'a> {
     compression: CompressionType,
 }
 
+// XXX #[derive(Default)]
 pub struct leveldb_readoptions_t {
     verify_checksums: bool,
     fill_cache: bool,
 }
 
+// XXX #[derive(Default)]
 pub struct leveldb_writeoptions_t {
     sync: bool,
 }
@@ -90,7 +97,9 @@ pub extern "C" fn leveldb_open(
 ) -> *mut leveldb_t {
     let options = unsafe { options.as_ref().expect("null pointer") };
     if (options.create_if_missing) {
-        let db = Box::new(leveldb_t {});
+        let db = Box::new(leveldb_t {
+            mem_store: HashMap::new(),
+        });
         Box::into_raw(db)
     } else {
         let err = CString::new(format!(
@@ -127,7 +136,23 @@ pub extern "C" fn leveldb_get(
     vallen: *mut usize,
     errptr: *mut *mut c_char,
 ) -> *mut c_char {
-    null::<c_char>() as *mut c_char
+    let db = unsafe { db.as_ref().expect("null pointer") };
+    let key = unsafe { slice::from_raw_parts(key, keylen) };
+    match db.mem_store.get(key) {
+        Some(val) => {
+            // XXX need malloc()-ed buffer
+            let mut vec = Vec::with_capacity(val.len());
+            unsafe { vec.set_len(val.len()) };
+            vec.copy_from_slice(val);
+            unsafe { *vallen = vec.len() };
+
+            // https://github.com/rust-lang/rust/issues/36284#issuecomment-244795570
+            let ptr = vec.as_mut_ptr();
+            ::std::mem::forget(vec);
+            ptr
+        }
+        None => null::<c_char>() as *mut c_char,
+    }
 }
 
 // Comparator
@@ -369,4 +394,8 @@ pub extern "C" fn leveldb_put(
     vallen: usize,
     errptr: *mut *mut c_char,
 ) {
+    let db = unsafe { db.as_mut().expect("null pointer") };
+    let key = unsafe { slice::from_raw_parts(key, keylen) };
+    let val = unsafe { slice::from_raw_parts(val, vallen) };
+    db.mem_store.insert(key.clone(), val.clone());
 }

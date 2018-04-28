@@ -40,6 +40,7 @@ struct leveldb_readoptions_t;
 #[repr(C)]
 struct leveldb_writeoptions_t;
 
+// XXX use cfg_if! macro
 //#[link(name = "leveldb", kind = "static")]
 //#[link(name = "stdc++", kind = "static")]
 #[link(name = "reveldb")]
@@ -269,7 +270,17 @@ fn main() {
 
         // Phase: put
         let mut err: *mut c_char = null::<char>() as *mut c_char;
-        leveldb_put(db, woptions, "foo", 3, "hello", 5, &mut err);
+        let key = CString::new("foo").unwrap();
+        let val = CString::new("hello").unwrap();
+        leveldb_put(
+            db,
+            woptions,
+            key.as_ptr(),
+            key.into_bytes().len(),
+            val.as_ptr(), // can be non-null terminated
+            val.into_bytes().len(),
+            &mut err,
+        );
         assert!(err.is_null());
         check_get(db, roptions, "foo", Some("hello"));
 
