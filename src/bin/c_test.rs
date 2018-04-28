@@ -1,5 +1,6 @@
 extern crate libc;
 
+use std::slice;
 use std::ptr::null;
 use std::cmp::min;
 use libc::{c_void, memcmp};
@@ -191,9 +192,13 @@ fn check_get(
 
 fn check_equal(expected: Option<&str>, v: *const c_char, n: usize) {
     if let Some(expected) = expected {
-        let expected = CString::new(expected).unwrap();
-        let val = unsafe { CStr::from_ptr(v) };
-        assert_eq!(&*expected, val);
+        assert!(!v.is_null());
+
+        // It does not have terminatating nul.
+        let expected = CString::new(expected).unwrap().into_bytes();
+
+        let val = unsafe { slice::from_raw_parts(v as *const u8, n) };
+        assert_eq!(expected, val);
     } else {
         assert!(v.is_null());
     }
