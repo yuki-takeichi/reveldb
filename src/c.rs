@@ -358,3 +358,15 @@ pub extern "C" fn leveldb_destroy_db(
     errptr: *mut *mut c_char,
 ) {
 }
+
+#[no_mangle]
+pub extern "C" fn leveldb_put(
+    db: *mut leveldb_t,
+    options: *const leveldb_writeoptions_t,
+    key: *const c_char,
+    keylen: usize,
+    val: *const c_char,
+    vallen: usize,
+    errptr: *mut *mut c_char,
+) {
+}

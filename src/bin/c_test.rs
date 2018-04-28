@@ -56,11 +56,11 @@ extern "C" {
     fn leveldb_put(
         db: *mut leveldb_t,
         options: *const leveldb_writeoptions_t,
-        key: *const str,
+        key: *const c_char,
         keylen: usize,
-        val: *const str,
+        val: *const c_char,
         vallen: usize,
-        errptr: *mut *mut char,
+        errptr: *mut *mut c_char,
     );
 
     /* Returns NULL if not found.  A malloc()ed array otherwise.
@@ -163,6 +163,42 @@ fn free_c_str_if_not_null(ptr: *mut *mut c_char) {
     }
 }
 
+fn check_get(
+    db: *mut leveldb_t,
+    roptions: *mut leveldb_readoptions_t,
+    key: &str,
+    expected: Option<&str>,
+) {
+    let mut err: *mut c_char = null::<char>() as *mut c_char;
+    let key = CString::new(key).unwrap();
+    let mut val_len: usize = 0;
+    let mut val = unsafe {
+        leveldb_get(
+            db,
+            roptions,
+            key.as_ptr(),
+            key.to_bytes().len(),
+            &mut val_len,
+            &mut err,
+        )
+    };
+    assert!(err.is_null());
+    check_equal(expected, val, val_len);
+    // XXX This should be leveldb_free(&mut val as *mut).
+    //     See comment above leveldb_free decl in leveldb/c.h.
+    free_c_str_if_not_null(&mut val);
+}
+
+fn check_equal(expected: Option<&str>, v: *const c_char, n: usize) {
+    if let Some(expected) = expected {
+        let expected = CString::new(expected).unwrap();
+        let val = unsafe { CStr::from_ptr(v) };
+        assert_eq!(&*expected, val);
+    } else {
+        assert!(v.is_null());
+    }
+}
+
 fn main() {
     unsafe {
         assert!(leveldb_major_version() >= 1);
@@ -215,7 +251,7 @@ fn main() {
         let mut err: *mut c_char = null::<char>() as *mut c_char;
         let db = leveldb_open(options, dbname, &mut err);
         assert!(!err.is_null());
-        println!("{:?}", CStr::from_ptr(err).to_string_lossy());
+        println!("{:?}", CStr::from_ptr(err).to_string_lossy()); // XXX debug
         leveldb_free(err);
 
         // Phase: open
@@ -224,24 +260,19 @@ fn main() {
         leveldb_options_set_create_if_missing(options, true); // XXX 1
         let db = leveldb_open(options, dbname, &mut err);
         assert!(err.is_null());
+        check_get(db, roptions, "foo", None);
 
-        //CheckGet(db, roptions, "foo", NULL);
+        // Phase: put
         let mut err: *mut c_char = null::<char>() as *mut c_char;
-        let key = CString::new("foo").unwrap();
-        let mut val_len: usize = 0;
-        let mut val = leveldb_get(
-            db,
-            roptions,
-            key.as_ptr(),
-            key.to_bytes().len(),
-            &mut val_len,
-            &mut err,
-        );
+        leveldb_put(db, woptions, "foo", 3, "hello", 5, &mut err);
         assert!(err.is_null());
-        assert!(val.is_null());
-        // XXX This should be leveldb_free(&mut val as *mut).
-        //     See comment above leveldb_free decl in leveldb/c.h.
-        free_c_str_if_not_null(&mut val);
+        check_get(db, roptions, "foo", Some("hello"));
+
+        /*
+        // Phase: compactall
+        leveldb_compact_range(db, NULL, 0, NULL, 0);
+        //CheckGet(db, roptions, "foo", "hello");
+        */
     }
     println!("done"); // XXX debug
 }
