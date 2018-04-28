@@ -194,8 +194,6 @@ fn check_get(
     };
     assert!(err.is_null());
     check_equal(expected, val, val_len);
-    // XXX This should be leveldb_free(&mut val as *mut).
-    //     See comment above leveldb_free decl in leveldb/c.h.
     free_c_str_if_not_null(&mut val);
 }
 
@@ -294,6 +292,12 @@ fn main() {
 
         // Phase: compactall
         leveldb_compact_range(db, null::<c_char>(), 0, null::<c_char>(), 0);
+        check_get(db, roptions, "foo", Some("hello"));
+
+        // Phase: compactrange
+        let key = CString::new("a").unwrap();
+        let limit = CString::new("z").unwrap();
+        leveldb_compact_range(db, key.as_ptr(), 1, limit.as_ptr(), 1);
         check_get(db, roptions, "foo", Some("hello"));
     }
     println!("done"); // XXX debug
