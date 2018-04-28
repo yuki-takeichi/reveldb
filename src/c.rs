@@ -75,6 +75,8 @@ pub struct leveldb_writeoptions_t {
     sync: bool,
 }
 
+pub struct leveldb_writebatch_t {}
+
 // Misc
 
 #[no_mangle]
@@ -407,5 +409,51 @@ pub extern "C" fn leveldb_compact_range(
     start_key_len: usize,
     limit_key: *const c_char,
     limit_key_len: usize,
+) {
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_writebatch_create() -> *mut leveldb_writebatch_t {
+    Box::into_raw(Box::new(leveldb_writebatch_t {}))
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_writebatch_put(
+    b: *mut leveldb_writebatch_t,
+    key: *const c_char,
+    keylen: usize,
+    val: *const c_char,
+    vallen: usize,
+) {
+}
+#[no_mangle]
+pub extern "C" fn leveldb_writebatch_clear(b: *mut leveldb_writebatch_t) {}
+#[no_mangle]
+pub extern "C" fn leveldb_writebatch_delete(
+    b: *mut leveldb_writebatch_t,
+    key: *const c_char,
+    kenlen: usize,
+) {
+}
+#[no_mangle]
+pub extern "C" fn leveldb_writebatch_destroy(b: *mut leveldb_writebatch_t) {
+    unsafe { Box::from_raw(b) };
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_write(
+    db: *mut leveldb_t,
+    woptions: *const leveldb_writeoptions_t,
+    wb: *mut leveldb_writebatch_t,
+    err: *mut *mut c_char,
+) {
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_writebatch_iterate(
+    b: *mut leveldb_writebatch_t,
+    state: *mut c_void,
+    put: extern "C" fn(*mut c_char, k: *const c_char, klen: usize, v: *const c_char, vlen: usize),
+    deleted: extern "C" fn(*mut c_char, k: *const c_char, klen: usize),
 ) {
 }

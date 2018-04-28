@@ -8,6 +8,15 @@ use std::ffi::CString;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
+trait CPtr {
+    fn c_ptr(self) -> *const c_char;
+}
+impl<'a> CPtr for &'a str {
+    fn c_ptr(self) -> *const c_char {
+        CString::new(self).unwrap().as_ptr()
+    }
+}
+
 #[repr(C)]
 enum leveldb_compression {
     no_compression = 0,
@@ -36,7 +45,8 @@ struct leveldb_readoptions_t;
 //#[repr(C)] struct leveldb_seqfile_t;
 //#[repr(C)] struct leveldb_snapshot_t;
 //#[repr(C)] struct leveldb_writablefile_t;
-//#[repr(C)] struct leveldb_writebatch_t;
+#[repr(C)]
+struct leveldb_writebatch_t;
 #[repr(C)]
 struct leveldb_writeoptions_t;
 
@@ -121,12 +131,44 @@ extern "C" {
     fn leveldb_writeoptions_create() -> *mut leveldb_writeoptions_t;
     fn leveldb_writeoptions_set_sync(opt: *mut leveldb_writeoptions_t, v: bool);
 
+    // Write batch
+    fn leveldb_writebatch_create() -> *mut leveldb_writebatch_t;
+    fn leveldb_writebatch_put(
+        b: *mut leveldb_writebatch_t,
+        key: *const c_char,
+        keylen: usize,
+        val: *const c_char,
+        vallen: usize,
+    );
+    fn leveldb_writebatch_clear(b: *mut leveldb_writebatch_t);
+    fn leveldb_writebatch_delete(b: *mut leveldb_writebatch_t, key: *const c_char, kenlen: usize);
+    fn leveldb_writebatch_destroy(b: *mut leveldb_writebatch_t);
+
+    // Range
     fn leveldb_compact_range(
         db: *mut leveldb_t,
         start_key: *const c_char,
         start_key_len: usize,
         limit_key: *const c_char,
         limit_key_len: usize,
+    );
+    fn leveldb_write(
+        db: *mut leveldb_t,
+        woptions: *const leveldb_writeoptions_t,
+        wb: *mut leveldb_writebatch_t,
+        err: *mut *mut c_char,
+    );
+    fn leveldb_writebatch_iterate(
+        b: *mut leveldb_writebatch_t,
+        state: *mut c_char,
+        put: extern "C" fn(
+            *mut c_char,
+            k: *const c_char,
+            klen: usize,
+            v: *const c_char,
+            vlen: usize,
+        ),
+        deleted: extern "C" fn(*mut c_char, k: *const c_char, klen: usize),
     );
 
     // Utility
@@ -299,6 +341,35 @@ fn main() {
         let limit = CString::new("z").unwrap();
         leveldb_compact_range(db, key.as_ptr(), 1, limit.as_ptr(), 1);
         check_get(db, roptions, "foo", Some("hello"));
+
+        // Phase: writebatch
+        {
+            let mut err: *mut c_char = null::<char>() as *mut c_char;
+            let wb = leveldb_writebatch_create();
+            leveldb_writebatch_put(wb, "foo".c_ptr(), 3, "a".c_ptr(), 1);
+            leveldb_writebatch_clear(wb);
+            leveldb_writebatch_put(wb, "bar".c_ptr(), 3, "b".c_ptr(), 1);
+            leveldb_writebatch_put(wb, "box".c_ptr(), 3, "c".c_ptr(), 1);
+            leveldb_writebatch_delete(wb, "bar".c_ptr(), 3);
+            leveldb_write(db, woptions, wb, &mut err);
+            //assert!(!err.is_null());
+            check_get(db, roptions, "foo", Some("hello"));
+            check_get(db, roptions, "bar", None);
+            check_get(db, roptions, "box", Some("c"));
+            let mut pos: i8 = 0;
+            extern "C" fn check_put(
+                ptr: *mut c_char,
+                k: *const c_char,
+                klen: usize,
+                v: *const c_char,
+                vlen: usize,
+            ) {
+            }
+            extern "C" fn check_del(ptr: *mut c_char, k: *const c_char, klen: usize) {}
+            leveldb_writebatch_iterate(wb, &mut pos, check_put, check_del);
+            assert_eq!(pos, 3);
+            leveldb_writebatch_destroy(wb);
+        }
     }
     println!("done"); // XXX debug
 }
