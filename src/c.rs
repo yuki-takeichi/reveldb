@@ -17,8 +17,8 @@ enum CompressionType {
 
 // C Struct
 
-pub struct leveldb_t<'a> {
-    mem_store: HashMap<&'a [c_char], &'a [c_char]>,
+pub struct leveldb_t {
+    mem_store: HashMap<Vec<c_char>, Vec<c_char>>,
 }
 
 pub struct leveldb_env_t {}
@@ -75,7 +75,9 @@ pub struct leveldb_writeoptions_t {
     sync: bool,
 }
 
-pub struct leveldb_writebatch_t {}
+pub struct leveldb_writebatch_t {
+    entries: Vec<(Vec<c_char>, Vec<c_char>)>,
+}
 
 // Misc
 
@@ -98,7 +100,7 @@ pub extern "C" fn leveldb_open(
     errptr: *mut *mut c_char,
 ) -> *mut leveldb_t {
     let options = unsafe { options.as_ref().expect("null pointer") };
-    if (options.create_if_missing) {
+    if options.create_if_missing {
         let db = Box::new(leveldb_t {
             mem_store: HashMap::new(),
         });
@@ -142,10 +144,7 @@ pub extern "C" fn leveldb_get(
     let key = unsafe { slice::from_raw_parts(key, keylen) };
     match db.mem_store.get(key) {
         Some(val) => {
-            // XXX need malloc()-ed buffer
-            let mut vec = Vec::with_capacity(val.len());
-            unsafe { vec.set_len(val.len()) };
-            vec.copy_from_slice(val);
+            let mut vec = val.to_vec();
             unsafe { *vallen = vec.len() };
 
             // https://github.com/rust-lang/rust/issues/36284#issuecomment-244795570
@@ -399,7 +398,7 @@ pub extern "C" fn leveldb_put(
     let db = unsafe { db.as_mut().expect("null pointer") };
     let key = unsafe { slice::from_raw_parts(key, keylen) };
     let val = unsafe { slice::from_raw_parts(val, vallen) };
-    db.mem_store.insert(key.clone(), val.clone());
+    db.mem_store.insert(key.to_vec(), val.to_vec());
 }
 
 #[no_mangle]
@@ -413,8 +412,11 @@ pub extern "C" fn leveldb_compact_range(
 }
 
 #[no_mangle]
-pub extern "C" fn leveldb_writebatch_create() -> *mut leveldb_writebatch_t {
-    Box::into_raw(Box::new(leveldb_writebatch_t {}))
+// XXX why lifetime elision does not work?
+pub extern "C" fn leveldb_writebatch_create<'a>() -> *mut leveldb_writebatch_t {
+    Box::into_raw(Box::new(leveldb_writebatch_t {
+        entries: Vec::new(),
+    }))
 }
 
 #[no_mangle]
@@ -425,15 +427,26 @@ pub extern "C" fn leveldb_writebatch_put(
     val: *const c_char,
     vallen: usize,
 ) {
+    let b = unsafe { b.as_mut().expect("null pointer") };
+    let key = unsafe { slice::from_raw_parts(key, keylen) };
+    let val = unsafe { slice::from_raw_parts(val, vallen) };
+    b.entries.push((key.to_vec(), val.to_vec()));
 }
 #[no_mangle]
-pub extern "C" fn leveldb_writebatch_clear(b: *mut leveldb_writebatch_t) {}
+pub extern "C" fn leveldb_writebatch_clear(b: *mut leveldb_writebatch_t) {
+    let b = unsafe { b.as_mut().expect("null pointer") };
+    b.entries.clear();
+}
+
 #[no_mangle]
 pub extern "C" fn leveldb_writebatch_delete(
     b: *mut leveldb_writebatch_t,
     key: *const c_char,
-    kenlen: usize,
+    keylen: usize,
 ) {
+    let b = unsafe { b.as_mut().expect("null pointer") };
+    let key = unsafe { slice::from_raw_parts(key, keylen) };
+    b.entries.retain(|&(ref k, _)| &k[..] != key);
 }
 #[no_mangle]
 pub extern "C" fn leveldb_writebatch_destroy(b: *mut leveldb_writebatch_t) {
@@ -447,6 +460,11 @@ pub extern "C" fn leveldb_write(
     wb: *mut leveldb_writebatch_t,
     err: *mut *mut c_char,
 ) {
+    let db = unsafe { db.as_mut().expect("null pointer") };
+    let wb = unsafe { wb.as_mut().expect("null pointer") };
+    wb.entries.iter().for_each(|&(ref key, ref val)| {
+        db.mem_store.insert(key.to_vec(), val.to_vec());
+    });
 }
 
 #[no_mangle]
@@ -456,4 +474,9 @@ pub extern "C" fn leveldb_writebatch_iterate(
     put: extern "C" fn(*mut c_char, k: *const c_char, klen: usize, v: *const c_char, vlen: usize),
     deleted: extern "C" fn(*mut c_char, k: *const c_char, klen: usize),
 ) {
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_debug(ptr: *const c_void) {
+    println!("{:?}", ptr);
 }

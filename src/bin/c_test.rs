@@ -17,6 +17,26 @@ impl<'a> CPtr for &'a str {
     }
 }
 
+// https://doc.rust-lang.org/beta/src/core/array.rs.html#118-264
+macro_rules! cpr_for_array {
+        ($($N:expr)+) => {
+            $(
+                impl CPtr for &'static [u8; $N] {
+                    fn c_ptr(self) -> *const c_char {
+                        self.as_ptr() as *const c_char
+                    }
+                }
+             )+
+        }
+}
+
+cpr_for_array! {
+     0  1  2  3  4  5  6  7  8  9
+    10 11 12 13 14 15 16 17 18 19
+    20 21 22 23 24 25 26 27 28 29
+    30 31 32
+}
+
 #[repr(C)]
 enum leveldb_compression {
     no_compression = 0,
@@ -58,6 +78,9 @@ extern "C" {
     // XXX create more type-safe wrapper interface
     // XXX use CStr instead of *mut char
     // https://stackoverflow.com/questions/24145823/how-do-i-convert-a-c-string-into-a-rust-string-and-back-via-ffi
+
+    // XXX debug
+    fn leveldb_debug(ptr: *const c_void);
 
     fn leveldb_open(
         options: *const leveldb_options_t,
@@ -141,7 +164,7 @@ extern "C" {
         vallen: usize,
     );
     fn leveldb_writebatch_clear(b: *mut leveldb_writebatch_t);
-    fn leveldb_writebatch_delete(b: *mut leveldb_writebatch_t, key: *const c_char, kenlen: usize);
+    fn leveldb_writebatch_delete(b: *mut leveldb_writebatch_t, key: *const c_char, keylen: usize);
     fn leveldb_writebatch_destroy(b: *mut leveldb_writebatch_t);
 
     // Range
@@ -346,13 +369,13 @@ fn main() {
         {
             let mut err: *mut c_char = null::<char>() as *mut c_char;
             let wb = leveldb_writebatch_create();
-            leveldb_writebatch_put(wb, "foo".c_ptr(), 3, "a".c_ptr(), 1);
+            leveldb_writebatch_put(wb, b"foo".c_ptr(), 3, b"a".c_ptr(), 1);
             leveldb_writebatch_clear(wb);
-            leveldb_writebatch_put(wb, "bar".c_ptr(), 3, "b".c_ptr(), 1);
-            leveldb_writebatch_put(wb, "box".c_ptr(), 3, "c".c_ptr(), 1);
-            leveldb_writebatch_delete(wb, "bar".c_ptr(), 3);
+            leveldb_writebatch_put(wb, b"bar".c_ptr(), 3, b"b".c_ptr(), 1);
+            leveldb_writebatch_put(wb, b"box".c_ptr(), 3, b"c".c_ptr(), 1);
+            leveldb_writebatch_delete(wb, b"bar".c_ptr(), 3);
             leveldb_write(db, woptions, wb, &mut err);
-            //assert!(!err.is_null());
+            assert!(err.is_null());
             check_get(db, roptions, "foo", Some("hello"));
             check_get(db, roptions, "bar", None);
             check_get(db, roptions, "box", Some("c"));
