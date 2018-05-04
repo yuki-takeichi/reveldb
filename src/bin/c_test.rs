@@ -61,7 +61,8 @@ struct leveldb_comparator_t;
 struct leveldb_env_t;
 //#[repr(C)] struct leveldb_filelock_t;
 //#[repr(C)] struct leveldb_filterpolicy_t;
-//#[repr(C)] struct leveldb_iterator_t;
+#[repr(C)]
+struct leveldb_iterator_t;
 #[repr(C)]
 struct leveldb_logger_t;
 #[repr(C)]
@@ -205,6 +206,29 @@ extern "C" {
     fn leveldb_free(ptr: *mut c_char);
     fn leveldb_major_version() -> i64;
     fn leveldb_minor_version() -> i64;
+    fn leveldb_create_iterator(
+        db: *mut leveldb_t,
+        options: *mut leveldb_readoptions_t,
+    ) -> *mut leveldb_iterator_t;
+
+    fn leveldb_iter_valid(iter: *const leveldb_iterator_t) -> bool;
+
+    fn leveldb_iter_seek_to_first(iter: *mut leveldb_iterator_t);
+
+    fn leveldb_iter_seek_to_last(iter: *mut leveldb_iterator_t);
+
+    fn leveldb_iter_next(iter: *mut leveldb_iterator_t);
+
+    fn leveldb_iter_prev(iter: *mut leveldb_iterator_t);
+
+    fn leveldb_iter_key(iter: *const leveldb_iterator_t, klen: *mut usize) -> *const c_char;
+
+    fn leveldb_iter_value(iter: *const leveldb_iterator_t, vlen: *mut usize) -> *const c_char;
+
+    fn leveldb_iter_destroy(iter: *mut leveldb_iterator_t);
+
+    fn leveldb_iter_get_error(iter: *const leveldb_iterator_t, errptr: *mut *mut c_char);
+
 }
 
 extern "C" fn cmp_destroy(_: *mut c_void) {}
@@ -281,6 +305,22 @@ fn check_equal(expected: Option<&str>, v: *const c_char, n: usize) {
     } else {
         assert!(v.is_null());
     }
+}
+
+fn check_iter(
+    iter: *mut leveldb_iterator_t,
+    key_expected: *const c_char,
+    val_expected: *const c_char,
+) {
+    let mut klen: usize = 0;
+    let key = unsafe { slice::from_raw_parts(leveldb_iter_key(iter, &mut klen), klen) };
+    let key_expected = unsafe { slice::from_raw_parts(key_expected, klen) };
+    assert_eq!(key_expected, key);
+
+    let mut vlen: usize = 0;
+    let val = unsafe { slice::from_raw_parts(leveldb_iter_value(iter, &mut vlen), vlen) };
+    let val_expected = unsafe { slice::from_raw_parts(val_expected, vlen) };
+    assert_eq!(val_expected, val);
 }
 
 fn main() {
@@ -422,6 +462,29 @@ fn main() {
             leveldb_writebatch_iterate(wb, &mut pos, check_put, check_del);
             assert_eq!(3, pos);
             leveldb_writebatch_destroy(wb);
+        }
+
+        // Phase: iter
+        {
+            let iter = leveldb_create_iterator(db, roptions);
+            assert!(!leveldb_iter_valid(iter));
+            leveldb_iter_seek_to_first(iter);
+            assert!(leveldb_iter_valid(iter));
+            check_iter(iter, b"box".c_ptr(), b"c".c_ptr());
+            leveldb_iter_next(iter);
+            check_iter(iter, b"foo".c_ptr(), b"hello".c_ptr());
+            leveldb_iter_prev(iter);
+            check_iter(iter, b"box".c_ptr(), b"c".c_ptr());
+            leveldb_iter_prev(iter);
+            assert!(!leveldb_iter_valid(iter));
+            leveldb_iter_seek_to_last(iter);
+            check_iter(iter, b"foo".c_ptr(), b"hello".c_ptr());
+            //leveldb_iter_seek(iter, b"b".c_ptr(), 1);
+            check_iter(iter, b"box".c_ptr(), b"c".c_ptr());
+            let mut err: *mut c_char = null::<char>() as *mut c_char;
+            leveldb_iter_get_error(iter, &mut err);
+            assert!(err.is_null());
+            leveldb_iter_destroy(iter);
         }
     }
     println!("done"); // XXX debug

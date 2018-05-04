@@ -1,5 +1,4 @@
 use std::slice;
-use std::collections::HashMap;
 use std::mem::transmute;
 use std::ptr::null;
 use std::ffi::CString;
@@ -8,6 +7,7 @@ use std::os::raw::c_char;
 use libc::{c_void, free};
 
 use write_batch::*;
+use db::*;
 
 // Struct
 
@@ -20,7 +20,7 @@ enum CompressionType {
 // C Struct
 
 pub struct leveldb_t {
-    mem_store: HashMap<Vec<c_char>, Vec<c_char>>,
+    rep: DB,
 }
 
 pub struct leveldb_env_t {}
@@ -81,6 +81,12 @@ pub struct leveldb_writebatch_t {
     rep: WriteBatch,
 }
 
+// XXX #[derive(Default)]
+pub struct leveldb_iterator_t {
+    // XXX make trait Iterator
+    rep: DBIterator,
+}
+
 // Misc
 
 #[no_mangle]
@@ -103,9 +109,7 @@ pub extern "C" fn leveldb_open(
 ) -> *mut leveldb_t {
     let options = unsafe { options.as_ref().expect("null pointer") };
     if options.create_if_missing {
-        let db = Box::new(leveldb_t {
-            mem_store: HashMap::new(),
-        });
+        let db = Box::new(leveldb_t { rep: DB::new() });
         Box::into_raw(db)
     } else {
         let err = CString::new(format!(
@@ -144,7 +148,7 @@ pub extern "C" fn leveldb_get(
 ) -> *mut c_char {
     let db = unsafe { db.as_ref().expect("null pointer") };
     let key = unsafe { slice::from_raw_parts(key, keylen) };
-    match db.mem_store.get(key) {
+    match db.rep.mem_store.get(key) {
         Some(val) => {
             let mut vec = val.to_vec();
             unsafe { *vallen = vec.len() };
@@ -400,7 +404,7 @@ pub extern "C" fn leveldb_put(
     let db = unsafe { db.as_mut().expect("null pointer") };
     let key = unsafe { slice::from_raw_parts(key, keylen) };
     let val = unsafe { slice::from_raw_parts(val, vallen) };
-    db.mem_store.insert(key.to_vec(), val.to_vec());
+    db.rep.mem_store.insert(key.to_vec(), val.to_vec());
 }
 
 #[no_mangle]
@@ -469,20 +473,20 @@ pub extern "C" fn leveldb_write(
     wb.rep.iterate_entries(
         |key, val| {
             // XXX handle error
-            db.mem_store.insert(key.to_vec(), val.to_vec());
+            db.rep.mem_store.insert(key.to_vec(), val.to_vec());
         },
         |key| {
             // XXX handle error
-            db.mem_store.remove(&key.to_vec());
+            db.rep.mem_store.remove(&key.to_vec());
         },
     );
     */
     wb.rep.entries.iter().for_each(|entry| match entry {
         &Entry::Deletion { ref key } => {
-            db.mem_store.remove(&key.to_vec());
+            db.rep.mem_store.remove(&key.to_vec());
         }
         &Entry::Value { ref key, ref val } => {
-            db.mem_store.insert(key.to_vec(), val.to_vec());
+            db.rep.mem_store.insert(key.to_vec(), val.to_vec());
         }
     });
 }
@@ -499,6 +503,84 @@ pub extern "C" fn leveldb_writebatch_iterate(
         |key, val| put(state, key.as_ptr(), key.len(), val.as_ptr(), val.len()),
         |key| deleted(state, key.as_ptr(), key.len()),
     );
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_create_iterator(
+    db: *mut leveldb_t,
+    options: *mut leveldb_readoptions_t,
+) -> *mut leveldb_iterator_t {
+    let db = unsafe { db.as_ref().expect("null pointer") };
+    let options = unsafe { options.as_ref().expect("null pointer") };
+
+    Box::into_raw(Box::new(leveldb_iterator_t {
+        rep: db.rep.iterator(),
+    }))
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_valid(iter: *const leveldb_iterator_t) -> bool {
+    let iter = unsafe { iter.as_ref().expect("null pointer") };
+    iter.rep.valid()
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_seek_to_first(iter: *mut leveldb_iterator_t) {
+    let mut iter = unsafe { iter.as_mut().expect("null pointer") };
+    iter.rep.seek_to_first();
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_seek_to_last(iter: *mut leveldb_iterator_t) {
+    let mut iter = unsafe { iter.as_mut().expect("null pointer") };
+    iter.rep.seek_to_last();
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_next(iter: *mut leveldb_iterator_t) {
+    let mut iter = unsafe { iter.as_mut().expect("null pointer") };
+    iter.rep.next()
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_prev(iter: *mut leveldb_iterator_t) {
+    let mut iter = unsafe { iter.as_mut().expect("null pointer") };
+    iter.rep.prev()
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_key(
+    iter: *const leveldb_iterator_t,
+    klen: *mut usize,
+) -> *const c_char {
+    let iter = unsafe { iter.as_ref().expect("null pointer") };
+    let s = iter.rep.key();
+    unsafe { *klen = s.len() };
+    s.as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_value(
+    iter: *const leveldb_iterator_t,
+    vlen: *mut usize,
+) -> *const c_char {
+    let iter = unsafe { iter.as_ref().expect("null pointer") };
+    let s = iter.rep.value();
+    unsafe { *vlen = s.len() };
+    s.as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_destroy(iter: *mut leveldb_iterator_t) {
+    unsafe { Box::from_raw(iter) };
+}
+
+#[no_mangle]
+pub extern "C" fn leveldb_iter_get_error(
+    iter: *const leveldb_iterator_t,
+    errptr: *mut *mut c_char,
+) {
+    let iter = unsafe { iter.as_ref().expect("null pointer") };
 }
 
 #[no_mangle]

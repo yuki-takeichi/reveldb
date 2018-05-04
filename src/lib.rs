@@ -17,6 +17,7 @@ pub mod c;
 mod log;
 mod memtable;
 mod write_batch;
+mod db;
 
 pub struct Env {
     pub lock_files: Mutex<HashSet<String>>,
@@ -30,15 +31,15 @@ impl Env {
     }
 }
 
-pub struct DB<'a> {
+pub struct DB_<'a> {
     env: &'a Env,
     dbname: &'static str,
     lk_file: File,
     lock: Mutex<()>,
 }
 
-impl<'a> DB<'a> {
-    pub fn new(env: &'a Env, dbname: &'static str) -> Result<DB<'a>, String> {
+impl<'a> DB_<'a> {
+    pub fn new(env: &'a Env, dbname: &'static str) -> Result<DB_<'a>, String> {
         if !Self::create_db_dir(dbname) {
             return Err(String::from("io error"));
         }
@@ -58,7 +59,7 @@ impl<'a> DB<'a> {
             .open(path);
 
         if let Ok(file) = file {
-            let db = DB {
+            let db = DB_ {
                 env: env,
                 dbname: dbname,
                 lk_file: file,
@@ -123,7 +124,7 @@ impl<'a> DB<'a> {
     }
 }
 
-impl<'a> Drop for DB<'a> {
+impl<'a> Drop for DB_<'a> {
     fn drop(&mut self) {
         let _ = self.lock.lock().unwrap();
         // println!("({}) drop", self.dbname);
@@ -138,19 +139,19 @@ impl<'a> Drop for DB<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Env, DB};
+    use super::{Env, DB_};
 
     #[test]
     fn file_lock() {
         let env = Env::new();
-        let db = DB::new(&env, "testdb").unwrap();
+        let db = DB_::new(&env, "testdb").unwrap();
         assert!(db.lock_file());
     }
 
     #[test]
     fn simple_put() {
         let env = Env::new();
-        let db = DB::new(&env, "testdb").unwrap();
+        let db = DB_::new(&env, "testdb").unwrap();
         // let status = db.put("hoge", "piyo");
         // assert!(status.is_ok());
     }
