@@ -379,6 +379,8 @@ fn main() {
             check_get(db, roptions, "foo", Some("hello"));
             check_get(db, roptions, "bar", None);
             check_get(db, roptions, "box", Some("c"));
+            // XXX TODO: check_getがstrを扱うとめんどくさいので
+            // &[u8]を扱うように変更する
             let mut pos: i8 = 0;
             extern "C" fn check_put(
                 ptr: *mut c_char,
@@ -387,8 +389,13 @@ fn main() {
                 v: *const c_char,
                 vlen: usize,
             ) {
+                let pos = ptr as *mut i8;
+                unsafe { *pos = *pos + 1 };
             }
-            extern "C" fn check_del(ptr: *mut c_char, k: *const c_char, klen: usize) {}
+            extern "C" fn check_del(ptr: *mut c_char, k: *const c_char, klen: usize) {
+                let pos = ptr as *mut i8;
+                unsafe { *pos = *pos + 1 };
+            }
             leveldb_writebatch_iterate(wb, &mut pos, check_put, check_del);
             assert_eq!(pos, 3);
             leveldb_writebatch_destroy(wb);

@@ -7,6 +7,8 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 use libc::{c_void, free};
 
+use write_batch::WriteBatch;
+
 // Struct
 
 #[repr(u8)]
@@ -76,7 +78,7 @@ pub struct leveldb_writeoptions_t {
 }
 
 pub struct leveldb_writebatch_t {
-    entries: Vec<(Vec<c_char>, Vec<c_char>)>,
+    rep: WriteBatch,
 }
 
 // Misc
@@ -415,7 +417,7 @@ pub extern "C" fn leveldb_compact_range(
 // XXX why lifetime elision does not work?
 pub extern "C" fn leveldb_writebatch_create<'a>() -> *mut leveldb_writebatch_t {
     Box::into_raw(Box::new(leveldb_writebatch_t {
-        entries: Vec::new(),
+        rep: WriteBatch::new(),
     }))
 }
 
@@ -430,12 +432,13 @@ pub extern "C" fn leveldb_writebatch_put(
     let b = unsafe { b.as_mut().expect("null pointer") };
     let key = unsafe { slice::from_raw_parts(key, keylen) };
     let val = unsafe { slice::from_raw_parts(val, vallen) };
-    b.entries.push((key.to_vec(), val.to_vec()));
+    b.rep.put(key.to_vec(), val.to_vec());
 }
+
 #[no_mangle]
 pub extern "C" fn leveldb_writebatch_clear(b: *mut leveldb_writebatch_t) {
     let b = unsafe { b.as_mut().expect("null pointer") };
-    b.entries.clear();
+    b.rep.clear();
 }
 
 #[no_mangle]
@@ -446,7 +449,7 @@ pub extern "C" fn leveldb_writebatch_delete(
 ) {
     let b = unsafe { b.as_mut().expect("null pointer") };
     let key = unsafe { slice::from_raw_parts(key, keylen) };
-    b.entries.retain(|&(ref k, _)| &k[..] != key);
+    b.rep.delete(key.to_vec());
 }
 #[no_mangle]
 pub extern "C" fn leveldb_writebatch_destroy(b: *mut leveldb_writebatch_t) {
@@ -462,18 +465,30 @@ pub extern "C" fn leveldb_write(
 ) {
     let db = unsafe { db.as_mut().expect("null pointer") };
     let wb = unsafe { wb.as_mut().expect("null pointer") };
-    wb.entries.iter().for_each(|&(ref key, ref val)| {
-        db.mem_store.insert(key.to_vec(), val.to_vec());
-    });
+    wb.rep.iterate_entries(
+        |key, val| {
+            // XXX handle error
+            db.mem_store.insert(key.to_vec(), val.to_vec());
+        },
+        |key| {
+            // XXX handle error
+            db.mem_store.remove(&key.to_vec());
+        },
+    );
 }
 
 #[no_mangle]
 pub extern "C" fn leveldb_writebatch_iterate(
     b: *mut leveldb_writebatch_t,
-    state: *mut c_void,
+    state: *mut c_char,
     put: extern "C" fn(*mut c_char, k: *const c_char, klen: usize, v: *const c_char, vlen: usize),
     deleted: extern "C" fn(*mut c_char, k: *const c_char, klen: usize),
 ) {
+    let b = unsafe { b.as_mut().expect("null pointer") };
+    b.rep.iterate_entries(
+        |key, val| put(state, key.as_ptr(), key.len(), val.as_ptr(), val.len()),
+        |key| deleted(state, key.as_ptr(), key.len()),
+    );
 }
 
 #[no_mangle]
