@@ -1,7 +1,6 @@
+extern crate crc;
 extern crate libc;
 extern crate nix;
-extern crate crc;
-
 
 use std::fs;
 use std::string::String;
@@ -17,6 +16,7 @@ use std::collections::hash_set::HashSet;
 pub mod c;
 mod log;
 mod memtable;
+mod write_batch;
 
 pub struct Env {
     pub lock_files: Mutex<HashSet<String>>,
@@ -24,7 +24,9 @@ pub struct Env {
 
 impl Env {
     pub fn new() -> Self {
-        Env { lock_files: Mutex::new(HashSet::new()) }
+        Env {
+            lock_files: Mutex::new(HashSet::new()),
+        }
     }
 }
 
@@ -37,14 +39,16 @@ pub struct DB<'a> {
 
 impl<'a> DB<'a> {
     pub fn new(env: &'a Env, dbname: &'static str) -> Result<DB<'a>, String> {
-
         if !Self::create_db_dir(dbname) {
             return Err(String::from("io error"));
         }
 
         let path = Self::lock_file_path(dbname);
         if !env.lock_files.lock().unwrap().insert(path.clone()) {
-            return Err(String::from(format!("({}) duplicate lock file error", dbname)));
+            return Err(String::from(format!(
+                "({}) duplicate lock file error",
+                dbname
+            )));
         }
 
         let file = OpenOptions::new()
@@ -124,7 +128,11 @@ impl<'a> Drop for DB<'a> {
         let _ = self.lock.lock().unwrap();
         // println!("({}) drop", self.dbname);
         self.unlock_file();
-        self.env.lock_files.lock().unwrap().remove(&Self::lock_file_path(self.dbname));
+        self.env
+            .lock_files
+            .lock()
+            .unwrap()
+            .remove(&Self::lock_file_path(self.dbname));
     }
 }
 

@@ -5,9 +5,10 @@ use std::collections::LinkedList;
 
 pub trait Allocator {
     fn allocate(&mut self) -> &mut Node;
-    fn new() -> Self where Self: Sized;
+    fn new() -> Self
+    where
+        Self: Sized;
 }
-
 
 pub struct NaiveAllocator {
     list: LinkedList<Node>,
@@ -21,7 +22,9 @@ impl Allocator for NaiveAllocator {
     }
 
     fn new() -> Self {
-        NaiveAllocator { list: LinkedList::new() }
+        NaiveAllocator {
+            list: LinkedList::new(),
+        }
     }
 }
 
@@ -36,7 +39,12 @@ impl Node {
     fn new() -> Self {
         Node {
             key: 0, // XXX default
-            next: RefCell::new([Box::new(None), Box::new(None), Box::new(None), Box::new(None)]),
+            next: RefCell::new([
+                Box::new(None),
+                Box::new(None),
+                Box::new(None),
+                Box::new(None),
+            ]),
         }
     }
 }
@@ -44,7 +52,9 @@ impl Node {
 pub trait SkipList {
     type Allocator: Allocator;
 
-    fn new(allocator: Self::Allocator) -> Self where Self: Sized;
+    fn new(allocator: Self::Allocator) -> Self
+    where
+        Self: Sized;
     fn add(&mut self, key: i8);
 }
 
@@ -77,12 +87,15 @@ pub struct MemTable<S: SkipList> {
 }
 
 impl<S> MemTable<S>
-    where S: SkipList
+where
+    S: SkipList,
 {
     fn new() -> Self {
         let allocator = <S as SkipList>::Allocator::new();
         let skip_list = <S>::new(allocator);
-        MemTable { skip_list: skip_list }
+        MemTable {
+            skip_list: skip_list,
+        }
     }
 }
 
