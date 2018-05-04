@@ -8,29 +8,36 @@ use std::ffi::CString;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
-trait CPtr {
+trait CChar {
     fn c_ptr(self) -> *const c_char;
+    fn c_ref(self) -> &'static [c_char];
 }
-impl<'a> CPtr for &'a str {
+impl<'a> CChar for &'static str {
     fn c_ptr(self) -> *const c_char {
         CString::new(self).unwrap().as_ptr()
+    }
+    fn c_ref(self) -> &'static [c_char] {
+        unsafe { &*(CString::new(self).unwrap().to_bytes() as *const [u8] as *const [i8]) }
     }
 }
 
 // https://doc.rust-lang.org/beta/src/core/array.rs.html#118-264
-macro_rules! cpr_for_array {
+macro_rules! c_char_for_array {
         ($($N:expr)+) => {
             $(
-                impl CPtr for &'static [u8; $N] {
+                impl CChar for &'static [u8; $N] {
                     fn c_ptr(self) -> *const c_char {
                         self.as_ptr() as *const c_char
+                    }
+                    fn c_ref(self) -> &'static [c_char] {
+                        unsafe { &*(&self[..] as *const [u8] as *const [i8]) }
                     }
                 }
              )+
         }
 }
 
-cpr_for_array! {
+c_char_for_array! {
      0  1  2  3  4  5  6  7  8  9
     10 11 12 13 14 15 16 17 18 19
     20 21 22 23 24 25 26 27 28 29
@@ -390,14 +397,30 @@ fn main() {
                 vlen: usize,
             ) {
                 let pos = ptr as *mut i8;
+                let key = unsafe { slice::from_raw_parts(k, klen) };
+                let val = unsafe { slice::from_raw_parts(v, vlen) };
+                match unsafe { *pos } {
+                    0 => {
+                        assert_eq!(b"bar".c_ref(), key);
+                        assert_eq!(b"b".c_ref(), val);
+                    }
+                    1 => {
+                        assert_eq!(b"box".c_ref(), key);
+                        assert_eq!(b"c".c_ref(), val);
+                    }
+                    _ => {}
+                }
                 unsafe { *pos = *pos + 1 };
             }
             extern "C" fn check_del(ptr: *mut c_char, k: *const c_char, klen: usize) {
                 let pos = ptr as *mut i8;
+                assert_eq!(2, unsafe { *pos });
+                let key = unsafe { slice::from_raw_parts(k, klen) };
+                assert_eq!(b"bar".c_ref(), key);
                 unsafe { *pos = *pos + 1 };
             }
             leveldb_writebatch_iterate(wb, &mut pos, check_put, check_del);
-            assert_eq!(pos, 3);
+            assert_eq!(3, pos);
             leveldb_writebatch_destroy(wb);
         }
     }
