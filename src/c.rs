@@ -7,7 +7,7 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 use libc::{c_void, free};
 
-use write_batch::WriteBatch;
+use write_batch::*;
 
 // Struct
 
@@ -465,6 +465,7 @@ pub extern "C" fn leveldb_write(
 ) {
     let db = unsafe { db.as_mut().expect("null pointer") };
     let wb = unsafe { wb.as_mut().expect("null pointer") };
+    /*
     wb.rep.iterate_entries(
         |key, val| {
             // XXX handle error
@@ -475,6 +476,15 @@ pub extern "C" fn leveldb_write(
             db.mem_store.remove(&key.to_vec());
         },
     );
+    */
+    wb.rep.entries.iter().for_each(|entry| match entry {
+        &Entry::Deletion { ref key } => {
+            db.mem_store.remove(&key.to_vec());
+        }
+        &Entry::Value { ref key, ref val } => {
+            db.mem_store.insert(key.to_vec(), val.to_vec());
+        }
+    });
 }
 
 #[no_mangle]
