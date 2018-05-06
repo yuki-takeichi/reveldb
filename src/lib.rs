@@ -18,6 +18,7 @@ mod log;
 mod memtable;
 mod write_batch;
 mod db;
+mod skiplist;
 
 pub struct Env {
     pub lock_files: Mutex<HashSet<String>>,

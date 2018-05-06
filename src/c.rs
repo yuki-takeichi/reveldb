@@ -537,6 +537,11 @@ pub extern "C" fn leveldb_iter_seek_to_last(iter: *mut leveldb_iterator_t) {
 }
 
 #[no_mangle]
+pub extern "C" fn leveldb_iter_seek(iter: *mut leveldb_iterator_t, k: *const c_char, klen: usize) {
+    let mut iter = unsafe { iter.as_mut().expect("null pointer") };
+}
+
+#[no_mangle]
 pub extern "C" fn leveldb_iter_next(iter: *mut leveldb_iterator_t) {
     let mut iter = unsafe { iter.as_mut().expect("null pointer") };
     iter.rep.next()

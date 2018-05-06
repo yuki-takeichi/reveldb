@@ -206,6 +206,8 @@ extern "C" {
     fn leveldb_free(ptr: *mut c_char);
     fn leveldb_major_version() -> i64;
     fn leveldb_minor_version() -> i64;
+
+    // Iterator
     fn leveldb_create_iterator(
         db: *mut leveldb_t,
         options: *mut leveldb_readoptions_t,
@@ -216,6 +218,7 @@ extern "C" {
     fn leveldb_iter_seek_to_first(iter: *mut leveldb_iterator_t);
 
     fn leveldb_iter_seek_to_last(iter: *mut leveldb_iterator_t);
+    fn leveldb_iter_seek(iter: *mut leveldb_iterator_t, k: *const c_char, klen: usize);
 
     fn leveldb_iter_next(iter: *mut leveldb_iterator_t);
 
@@ -315,7 +318,7 @@ fn check_iter(
     let mut klen: usize = 0;
     let key = unsafe { slice::from_raw_parts(leveldb_iter_key(iter, &mut klen), klen) };
     let key_expected = unsafe { slice::from_raw_parts(key_expected, klen) };
-    assert_eq!(key_expected, key);
+    assert_eq!(key_expected, key); // XXX TODO FIXME: assertion failure for leveldb
 
     let mut vlen: usize = 0;
     let val = unsafe { slice::from_raw_parts(leveldb_iter_value(iter, &mut vlen), vlen) };
@@ -479,7 +482,7 @@ fn main() {
             assert!(!leveldb_iter_valid(iter));
             leveldb_iter_seek_to_last(iter);
             check_iter(iter, b"foo".c_ptr(), b"hello".c_ptr());
-            //leveldb_iter_seek(iter, b"b".c_ptr(), 1);
+            leveldb_iter_seek(iter, b"b".c_ptr(), 1);
             check_iter(iter, b"box".c_ptr(), b"c".c_ptr());
             let mut err: *mut c_char = null::<char>() as *mut c_char;
             leveldb_iter_get_error(iter, &mut err);
