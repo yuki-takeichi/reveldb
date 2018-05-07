@@ -3,6 +3,11 @@ use std::collections::HashMap;
 
 pub struct DB {
     pub mem_store: HashMap<Vec<c_char>, Vec<c_char>>,
+    //   RefCell is not appropriate because skip_list can be read in multiple threads (write from single thread though), and RefCell is not thread-safe. So we have to employ either Arc<>, Mutex<> or RwLock<> to check borrow and mutability. See the discussion:
+    //   https://www.reddit.com/r/rust/comments/32cl4g/threadsafe_versions_of_cell_and_refcell/.
+    //
+    //   We have to allow multiple reads and single write simultaneously, and this simuation does not met the borrowing rules Rust employs.
+    // skip_list: Arc<SkipList<Vec<c_char>>>
 }
 pub struct DBIterator {
     initialized: bool,
