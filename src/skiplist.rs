@@ -2,7 +2,8 @@ use std::mem::swap;
 
 struct Node<Key> {
     key: Key,
-    next: Option<Box<Node<Key>>>, // XXX Change it Option<&mut Node> later.
+    // XXX Change it AtomicPtr<Node> later.
+    next: Option<Box<Node<Key>>>,
 }
 
 impl<Key> Node<Key> {
@@ -24,6 +25,7 @@ impl<Key> Node<Key> {
     }
 }
 
+// Use TypedArena inside
 pub struct SkipList<Key> {
     head: Box<Node<Key>>,
     maxHeight: u8,
@@ -47,12 +49,14 @@ where
 
     pub fn insert(&mut self, key: Key) {
         // XXX stub impl
-        if self.head.next.is_some() {
+        // TODO: impl FindGreaterOrEqual()-like fn
+        let prev = &mut self.head;
+        if prev.next.is_some() {
             let mut x = Node::new(key, self.maxHeight);
-            swap(&mut x.next, &mut self.head.next);
-            self.head.next = Some(x);
+            swap(&mut x.next, &mut prev.next);
+            prev.next = Some(x);
         } else {
-            self.head.next = Some(Node::new(key, self.maxHeight));
+            prev.next = Some(Node::new(key, self.maxHeight));
         }
     }
 }
