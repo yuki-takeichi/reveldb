@@ -1,3 +1,5 @@
+extern crate typed_arena;
+
 extern crate crc;
 extern crate libc;
 extern crate nix;
@@ -139,6 +141,7 @@ impl<'a> Drop for DB_<'a> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::{Env, DB_};
@@ -158,3 +161,4 @@ mod tests {
         // assert!(status.is_ok());
     }
 }
+*/
