@@ -4,15 +4,22 @@ use typed_arena::Arena;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::cell::RefCell;
 use std::ffi::CString;
+use std::ptr::null;
 
 struct Node {
     key: Vec<c_char>,      // XXX alloc with arena and use &[c_char] instead.
     next: AtomicPtr<Node>, // last.next.is_null() == true
 }
 
+impl Node {
+    pub fn next(&self, level: u8) -> *mut Node {
+        self.next.load(Ordering::Acquire)
+    }
+}
+
 pub struct SkipList {
     arena: Arena<Node>,
-    head: AtomicPtr<Node>,
+    head: AtomicPtr<Node>, // XXX *mut Node is enouth?
     maxHeight: u8,
 }
 
@@ -35,6 +42,10 @@ impl SkipList {
         }
     }
 
+    fn head(&self) -> *mut Node {
+        self.head.load(Ordering::Acquire)
+    }
+
     fn new_node(&self, key: Vec<c_char>, next: AtomicPtr<Node>) -> *mut Node {
         self.arena.alloc(Node {
             key: key,
@@ -49,9 +60,9 @@ impl SkipList {
     ) -> Option<&mut Node> {
         let order = Ordering::SeqCst; // XXX relax
 
-        let mut x = unsafe { self.head.load(order).as_mut().expect("null pointer") };
+        let mut x = unsafe { self.head().as_mut() }.expect("null pointer");
         loop {
-            if let Some(next) = unsafe { x.next.load(order).as_mut() } {
+            if let Some(next) = unsafe { x.next(0).as_mut() } {
                 if key >= &next.key[..] {
                     if let Some(prev) = prev {
                         *prev = x;
@@ -86,11 +97,47 @@ impl SkipList {
     }
 }
 
+struct Iterator<'a> {
+    list: &'a SkipList,
+    node: *mut Node,
+}
+
+impl<'a> Iterator<'a> {
+    pub fn new(list: &'a SkipList) -> Iterator<'a> {
+        Iterator {
+            list: list,
+            node: null::<Node>() as *mut Node,
+        }
+    }
+
+    pub fn seek_to_first(&mut self) {
+        self.node = unsafe { self.list.head().as_mut() }
+            .expect("null pointer")
+            .next(0);
+    }
+
+    pub fn next(&mut self) {
+        // XXX remove 'unsafe' here
+        self.node = unsafe { self.node.as_ref().expect("invalid iter") }.next(0);
+    }
+
+    // XXX stub
+    pub fn valid(&self) -> bool {
+        !self.node.is_null()
+    }
+
+    pub fn key(&self) -> &'a [c_char] {
+        &unsafe { self.node.as_ref() }
+            .expect("invalid iter state")
+            .key[..]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::raw::c_char;
     use std::ffi::CString;
-    use super::SkipList;
+    use super::{Iterator, SkipList};
 
     fn c_ref(string: &'static str) -> &'static [c_char] {
         unsafe { &*(CString::new(string).unwrap().to_bytes() as *const [u8] as *const [i8]) }
@@ -102,5 +149,19 @@ mod tests {
         let key = c_ref("hoge");
         list.insert(key);
         assert!(list.contains(key));
+    }
+
+    #[test]
+    fn test_iterator() {
+        let mut list = SkipList::new(1);
+        let key = c_ref("hoge");
+        list.insert(key);
+
+        let mut iter = Iterator::new(&list);
+        iter.seek_to_first();
+        assert!(iter.valid());
+        assert_eq!(key, iter.key());
+        iter.next();
+        assert!(!iter.valid());
     }
 }
