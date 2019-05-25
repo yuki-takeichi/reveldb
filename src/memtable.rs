@@ -31,7 +31,7 @@ impl Allocator for NaiveAllocator {
 // Skip list
 
 pub struct Node {
-    key: i8,
+    key: i32,
     next: RefCell<[Box<Option<Node>>; 4]>,
 }
 
